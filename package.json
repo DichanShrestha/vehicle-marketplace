@@ -1,0 +1,32 @@
+{
+  "name": "vehicle-marketplace",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon",
+    "topics": "node src/scripts/create-topics.js",
+    "transaction": "node src/consumers/transaction-consumer.js",
+    "notification": "node src/consumers/notification-consumer.js",
+    "listing": "node src/consumers/listing-consumer.js",
+    "replay": "node src/producers/dlq-replay.js",
+    "producer": "node src/scripts/producer.js",
+    "notification-producer": "node src/producers/notification-producer.js",
+    "listing-producer": "node src/producers/listing-producer.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "dotenv": "^17.4.2",
+    "kafkajs": "^2.2.4",
+    "pg": "^8.22.0",
+    "prisma": "^7.8.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}

@@ -1,0 +1,6 @@
+node_modules
+.env
+prisma/generated
+logs
+redpanda-data
+postgres-data

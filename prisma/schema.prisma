@@ -1,0 +1,42 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model ProcessedEvent {
+  eventId     String   @id
+  processedAt DateTime @default(now())
+
+  @@map("processed_events")
+}
+
+model Booking {
+  id         String   @id @default(uuid())
+  eventId    String   @unique
+  vehicleId  String   @unique
+  userId     String
+  createdAt  DateTime @default(now())
+
+  @@map("bookings")
+}
+
+model ProcessedNotification {
+  eventId String @id
+
+  processedAt DateTime @default(now())
+
+  @@map("processed_notifications")
+}
+
+model Listing {
+  id         String   @id @default(uuid())
+  vehicleId  String   @unique
+  price      Int
+  version    Int
+  createdAt  DateTime @default(now())
+
+  @@map("listings")
+}
