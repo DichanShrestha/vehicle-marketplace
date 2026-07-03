@@ -25,8 +25,9 @@ model Booking {
 
 model ProcessedNotification {
   eventId String @id
-
+  status      String   // 'pending' | 'sent' | 'failed'
   processedAt DateTime @default(now())
+  attemptCount Int      @default(0)
 
   @@map("processed_notifications")
 }

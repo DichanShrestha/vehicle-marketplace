@@ -22,62 +22,63 @@ async function start() {
     await consumer.run({
       eachMessage: async ({ message }) => {
         if (!message.value) return;
+
         const payload = JSON.parse(message.value.toString());
-        const { event } = payload;
-
-        const { eventId, userId, email } = event;
-
+        const { eventId, userId, email } = payload.event;
         const currentAttempt = payload.failure?.attemptCount ?? 0;
+
+        let record;
+        try {
+          record = await prisma.processedNotification.create({
+            data: { eventId, status: "pending", attemptCount: currentAttempt },
+          });
+        } catch (error) {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2002"
+          ) {
+            record = await prisma.processedNotification.findUnique({
+              where: { eventId },
+            });
+            if (record.status === "sent") {
+              console.log(`Event ${eventId} already sent. Skipping.`);
+              return;
+            }
+          } else {
+            throw error;
+          }
+        }
 
         try {
           sendEmail(email);
-
-          try {
-            await prisma.processedNotification.create({
-              data: {
-                eventId,
-              },
-            });
-          } catch (error) {
-            if (
-              error instanceof Prisma.PrismaClientKnownRequestError &&
-              error.code === "P2002"
-            ) {
-              console.log(`Duplicate event ${eventId}. Skipping...`);
-              return;
-            }
-
-            throw error;
-          }
-
+          await prisma.processedNotification.update({
+            where: { eventId },
+            data: { status: "sent" },
+          });
           console.log("email sent successfully");
         } catch (error) {
-          if (error instanceof Error) {
-            const dlqMessage = {
-              event: {
-                eventId,
-                email,
-                userId,
-              },
-              failure: {
-                reason: error.message,
-                attemptCount: currentAttempt + 1,
-                originalTopic: "notifications.send",
-                timestamp: new Date().toISOString(),
-              },
-            };
+          await prisma.processedNotification.update({
+            where: { eventId },
+            data: { status: "failed", attemptCount: currentAttempt + 1 },
+          });
 
-            await producer.send({
-              topic: "notifications.dlq",
-              messages: [
-                {
-                  value: JSON.stringify(dlqMessage),
-                },
-              ],
-            });
-
-            console.log("email sent to dlq for retries");
-          }
+          await producer.send({
+            topic: "notifications.dlq",
+            messages: [
+              {
+                value: JSON.stringify({
+                  event: { eventId, email, userId },
+                  failure: {
+                    reason: error.message,
+                    attemptCount: currentAttempt + 1,
+                    originalTopic: "notifications.send",
+                    timestamp: new Date().toISOString(),
+                  },
+                }),
+              },
+            ],
+          });
+          console.log("email sent to dlq for retries");
         }
       },
     });

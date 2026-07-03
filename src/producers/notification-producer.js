@@ -12,8 +12,8 @@ async function main() {
         key: "notification-1",
         value: JSON.stringify({
           event: {
-            eventId: "evt-1",
-            userId: "user-1",
+            eventId: "evt-3",
+            userId: "user-2",
             email: "fail@test.com",
           },
         }),
