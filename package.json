@@ -10,7 +10,7 @@
     "notification": "node src/consumers/notification-consumer.js",
     "listing": "node src/consumers/listing-consumer.js",
     "replay": "node src/producers/dlq-replay.js",
-    "producer": "node src/scripts/producer.js",
+    "transaction-producer": "node src/producers/transaction-producer.js",
     "notification-producer": "node src/producers/notification-producer.js",
     "listing-producer": "node src/producers/listing-producer.js"
   },

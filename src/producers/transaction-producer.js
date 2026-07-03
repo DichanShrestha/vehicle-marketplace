@@ -20,7 +20,7 @@ async function main() {
     ],
   });
 
-  console.log("Event sent");
+  console.log("Transaction event sent");
 
   await producer.disconnect();
 }

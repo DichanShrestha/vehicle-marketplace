@@ -209,3 +209,85 @@ The following scenarios were verified:
 - Retry count increases after each replay.
 - Replay stops after three failed attempts.
 - Duplicate notification events are skipped through idempotency.
+
+# Task 3 – Event Ordering & Version Guard
+
+## Overview
+
+The Listing Service consumes events from the `listings.price.updated` Kafka topic. Since Kafka events may arrive out of order due to retries or consumer rebalancing, the consumer ensures that only the latest version of a listing is stored.
+
+Each event contains:
+
+- `vehicleId`
+- `price`
+- `version`
+
+The `version` is a monotonically increasing integer for each vehicle.
+
+---
+
+## Database Schema
+
+### `listings`
+
+| Column      | Description                 |
+| ----------- | --------------------------- |
+| `id`        | Listing ID                  |
+| `vehicleId` | Vehicle identifier (Unique) |
+| `price`     | Current listing price       |
+| `version`   | Latest processed version    |
+| `createdAt` | Record creation timestamp   |
+
+---
+
+## Version Guard Strategy
+
+The consumer uses a database-level conditional update to prevent stale events from overwriting newer data.
+
+When an event is received:
+
+1. The consumer attempts to update the listing only if the stored version is less than the incoming version.
+2. If no rows are updated:
+   - The consumer checks whether the listing already exists.
+   - If it does not exist, a new listing is created.
+   - If it already exists, the event is considered stale and is ignored.
+3. A unique constraint on `vehicleId` prevents duplicate listing creation if multiple consumers attempt to create the same listing simultaneously.
+
+The conditional update is performed using:
+
+```ts
+await prisma.listing.updateMany({
+  where: {
+    vehicleId,
+    version: {
+      lt: version,
+    },
+  },
+  data: {
+    price,
+    version,
+  },
+});
+```
+
+This approach relies entirely on the database and does not require any external locking.
+
+---
+
+## Race Condition Handling
+
+If two consumers attempt to create the same listing simultaneously, one insert succeeds while the other fails with Prisma's `P2002` unique constraint error.
+
+The consumer catches this exception and safely ignores the duplicate create request, preventing duplicate records.
+
+---
+
+## Testing Performed
+
+The following scenarios were tested:
+
+- Successfully created a new listing (`version = 1`).
+- Sent events out of order (`v3 → v1 → v2`).
+- Verified that the stored listing remained at `version = 3`, proving stale events were ignored.
+- Sent a newer event (`v4`) and verified that the listing was successfully updated from version `3` to version `4`.
+- Verified that concurrent listing creation is safely handled using the database unique constraint on `vehicleId`.
