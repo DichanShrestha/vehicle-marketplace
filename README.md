@@ -192,23 +192,33 @@ This prevents infinite retry loops while allowing transient failures to be retri
 
 ## Idempotency
 
-Notification processing is idempotent using the `processed_notifications` table.
+Idempotency is tracked via a `status` field (`pending` / `sent` / `failed`) on the `processed_notifications` table, rather than by mere row existence.
 
-Before recording a successful notification, the consumer checks whether the `eventId` has already been processed. If the same event is replayed multiple times, duplicate deliveries are skipped.
+When an event is received:
 
-This guarantees that replaying the DLQ multiple times does not result in the same notification being processed more than once.
+1. The consumer attempts to create a `processed_notifications` row with `status: "pending"`.
+2. If the row already exists (unique constraint on `eventId`), the consumer looks up its current status:
+   - If `status` is `"sent"`, the event has already been successfully delivered — it is skipped, preventing a duplicate email.
+   - If `status` is `"pending"` or `"failed"`, the event has not yet succeeded — processing continues and the send is retried.
+3. On successful send, the row is updated to `status: "sent"`.
+4. On failure, the row is updated to `status: "failed"` with an incremented `attemptCount`, and the event is published to the DLQ.
+
+This distinction matters because a naive existence-check (skip if the eventId has ever been seen) would treat a _failed_ attempt as already handled, silently dropping the retry and preventing the email from ever being sent. Tracking status ensures that:
+
+- A duplicate delivery of an **already-sent** event is skipped (no double-send).
+- A replay of a **previously-failed** event is retried rather than dropped (no lost notification).
 
 ## Testing Performed
 
 The following scenarios were verified:
 
-- Successful notification delivery.
-- Failed notification is published to `notifications.dlq`.
+- Successful notification delivery updates status to `sent`.
+- Failed notification is published to `notifications.dlq` and status is set to `failed`.
 - Failure metadata is correctly attached to the DLQ message.
-- Replay republishes failed events to `notifications.send`.
-- Retry count increases after each replay.
+- Replaying a failed event retries the send rather than skipping it, and `attemptCount` increments correctly.
+- Replaying an already-sent event is skipped, confirming no duplicate email is sent.
+- Retry count increases after each replay via the DLQ replay script.
 - Replay stops after three failed attempts.
-- Duplicate notification events are skipped through idempotency.
 
 # Task 3 – Event Ordering & Version Guard
 
