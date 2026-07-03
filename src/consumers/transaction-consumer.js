@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { prisma } from "../utils/prisma.js";
 import kafka from "../utils/kafka.js";
+import { Prisma } from "@prisma/client";
 
 const consumer = kafka.consumer({ groupId: "transaction-consumer" });
 
